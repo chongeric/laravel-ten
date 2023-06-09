@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -11,7 +13,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        //记录SQl日志
+        $this->sqlListen();
     }
 
     /**
@@ -20,5 +23,28 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         //
+    }
+
+    /**记录SQl
+     * @return void
+     */
+    public function sqlListen()
+    {
+        if (config('database.log_listen') === true) {
+            DB::listen(function ($query) {
+                $tmp = str_replace('?', '"'.'%s'.'"', $query->sql);
+                $qBindings = [];
+                foreach ($query->bindings as $key => $value) {
+                    if (is_numeric($key)) {
+                        $qBindings[] = $value;
+                    } else {
+                        $tmp = str_replace(':'.$key, '"'.$value.'"', $tmp);
+                    }
+                }
+                $tmp = vsprintf($tmp, $qBindings);
+                $tmp = str_replace("\\", "", $tmp);
+                Log::channel('sql_listen')->info('SQL执行时间: '.$query->time .'ms'."\n".'  SQL: '.$tmp."\n\t");
+            });
+        }
     }
 }
